@@ -1,0 +1,345 @@
+---
+title: "Pet adoption in Malaysia"
+author: "Ryan Keen & Katherine (Guilin) Li"
+date: "12/10/2019"
+output: html_document
+#runtime: shiny
+---
+
+```{r setup, include=FALSE,cache=TRUE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+library(dplyr)
+library(skimr)
+library(magrittr)
+library(ggplot2)
+library(randomForest)
+library(glmnet)
+#library(summarytools)
+library(caret)
+library(pROC)
+library(ROCR)
+library("tm")
+library("SnowballC")
+library("wordcloud")
+library("RColorBrewer")
+library(shiny)
+library(shinythemes)
+library(tidyverse)
+library(ggforce)
+library(ggthemes)
+library(ggRandomForests)
+
+setwd("C:/Users/Katherine/Desktop/HSPH/PhD/courses/Fall2019/BST260/Project")
+proj_data <- read.csv("train.csv")
+
+```
+
+# What are the important predictors for pet adoption speed in shelter in Malaysia?
+##### A study of PetFinder.my data - Malaysia 
+##### December 2019
+
+### Overview and Motivation
+Each year, millions of dogs and cats are abandoned, abused, neglected, and ultimately placed in shelters where they await adoption. With that, it is extremely important to understand that pets are adopted are very different rates based on a variety of factors. Once the waiting process has exceeded a substantial amount of time, the placement process often times no longer seems to be feasible for these animals, and thus, there is a common move to euthanize the animal. This is often decided in an attempt to prevent deteriorating the health of the animal or to end any suffering or trauma that may be inflicted upon the animal as a result of residing in a shelter. Additionally, euthanization is often used to prevent exploiting an animal’s poor health and/or condition for fundraising purposes or brand enhancement for animal welfare groups. It has been shown that animal adoption rates are strongly correlated with the quality and quantity of information available to those who seek to adopt pets, such as photograph quality, texts, breed, color, etc. While many believe that euthanasia is the best possible option in numerous scenarios where animals reside in shelters for long periods of time, it may be better to use a more comprehensive approach to inform this decision. One possible way to better inform the aspects of this decision would analyzing the rate of adoption for animals that are placed in shelters. PetFinder.my has grown as a hub for those seeking to adopt a pet in Malaysia that centralizes all of the available information on more than 16,000 pets that are currently homeless. PetFinder.my has compiled this information into a comprehensive dataset that can be used to understand the factors that influence adoption. Using this information would be exceptionally useful in educating the public on the importance of adopting pets in shelters, rather than purchasing from stores. Furthermore, it could be used to inform adoption agencies on best practices for advertising pet profiles to increase the likelihood of adoption in order to avoid outcomes such as euthanasia. 
+
+### Related Work: 
+After connecting with the diverse networks of students at the Harvard Chan School of Public Health, we found a common theme among cohorts of students was the adoption of pets to provide them with support and company while pursuing academia. After exploring this topic further through various ongoing conversations, we decided to explore pet adoption as a potential topic for this project. Learning of the different practices surrounding pet adoption in a variety of counties around the world, we began seeking data on these rates and influencing factors. Finally, we found that PetFinder.my in Malaysia has created and maintained one of the most comprehensive pet adoption datasets to data, and thus decided to explore, visusalize and analyze the dataset. 
+
+### Initial Questions: 
+- Can we make a prediction model to predict the adoptability of pets?
+- What are the important predictors of adoptability of pets, based on the dataset we have obtained?
+- Are certain colors favored for pets in the shelter for adoption? Does it differ fot cats and dogs?
+- Do gender, age, and pure breed affect pets adoptability?
+
+### Dataset inspection and management
+ For the purpose of study, we are using a dataset from PetFinder.my,  Malaysia's largest and most comprehensive pet portal since 2008 used for the widespread adoption of dogs and cats. This dataset consists of 14993 observations and 25 variables, which are:
+ PetID, Type (1 = Dog, 2 = Cat), Name, Age (when listed, in months), Breed1 (Primary breed of pet), Breed2 (Secondary breed of pet, if of mixed breed), Gender (1 = Male, 2 = Female, 3 = Mixed, if profile represents group of pets), Color1 (main color of pet), Color2, Color3, MaturitySize (1 = Small, 2 = Medium, 3 = Large, 4 = Extra Large, 0 = Not Specified), FurLength (1 = Short, 2 = Medium, 3 = Long, 0 = Not Specified), Vaccinated (1 = Yes, 2 = No, 3 = Not Sure), Dewormed (1 = Yes, 2 = No, 3 = Not Sure), Sterilized (1 = Yes, 2 = No, 3 = Not Sure), Health (1 = Healthy, 2 = Minor Injury, 3 = Serious Injury, 0 = Not Specified), Quantity, Fee, State, RescuerID, VideoAmt (Total uploaded videos for this pet), PhotoAmt (Total uploaded photos for this pet), Description, and AdoptionSpeed (how quickly a pet is adopted). 
+ Our main outcome of interest is AdoptionSpeed, with its original categories shown below:
+     0 - Pet was adopted on the same day as it was listed.
+     1 - Pet was adopted between 1 and 7 days (1st week) after being listed.
+     2 - Pet was adopted between 8 and 30 days (1st month) after being listed.
+     3 - Pet was adopted between 31 and 90 days (2nd & 3rd month) after being listed.
+     4 - No adoption after 100 days of being listed. 
+ Note that there are no pets in this dataset that waited between 90 and 100 days, so it is not listed in the categories.
+
+ From the initial inspection of the data, it was found that there were no missing values in the dataset. As the original variables are mostly in a numerical form, including categorical ones, we first turned categorical variables from numerical to factors, with explanatory labels added to some important variables. As there was a vast number of nuanced breeds of both dogs and cats, we created a new variable to indicate if a pet is of pure breed or mixed breed, and that was included in the prediction models to represent breed. We also created a binary indicator for being adopted within 100 days (1) vs beyond 100 days (0), as the outcome of prediction models. We created a new age variable which was a conversion age from month to year with 0.5 correction for zero values, as we will use the log scale of age in visualization. We also dropped variables of Rescuer ID and Pet ID as they do not include much information.
+
+```{r data inspection,cache=TRUE}
+skim(proj_data)
+proj_data <- proj_data %>% mutate(adspeed_bin = (AdoptionSpeed != 4) )
+
+cols <- c("Breed1", "Breed2", "Gender", "Color1", "Color2", "Color3", "MaturitySize", "FurLength", "Vaccinated", "Dewormed", "Sterilized", "Health", "State", "adspeed_bin", "Type")
+
+#proj_data2 <- proj_data
+
+proj_data2 <- select(proj_data,-c(PetID,RescuerID))
+
+proj_data2 %<>% mutate_each_(funs(factor(.)),cols)
+
+proj_data2$AdoptionSpeed <- factor(proj_data2$AdoptionSpeed, 
+                                   levels = c(0,1,2,3,4),
+                                   labels = c("Same Day", "Between 1 and 7 days",
+                                              "Between 8 and 30 days", "Between 31 and 90 Days",
+                                              "No Adoption After 100 Days"))
+
+proj_data2 <- proj_data2 %>% mutate(purebreed = Breed2==0)
+
+proj_data2 <- proj_data2 %>% mutate(age_adjusted_years = (Age + 0.5)/12)
+
+proj_data2$Gender <- factor(proj_data2$Gender,
+                    levels = c(1,2,3),
+                    labels = c("Male", "Female", "Mixed"))
+
+proj_data2$Type <- factor(proj_data2$Type,
+                            levels = c(1,2),
+                            labels = c("Dog", "Cat"))
+
+proj_data2$purebreed <- factor(proj_data2$purebreed,
+                          levels = c(FALSE,TRUE),
+                          labels = c("Mixed Breed", "Pure Breed"))
+
+proj_data2$Color1 <- factor(proj_data2$Color1, 
+                            levels = c(1,2,3,4,5,6,7),
+                            labels = c("Black", "Brown",
+                                       "Golden", "Yellow",
+                                       "Cream", "Gray", "White"))
+#summary(proj_data2)
+skim(proj_data2)
+
+
+```
+
+
+### Exploratory analysis
+#### Shiny app for visualization
+To visualize the data, we constructed a shiny app to generate two interactive ggplots. These plots analyzed age, base color of fur, type of animal (dog/cat), and breed status with respect to adoption speed: The first visualization shows adoption speeds, as indexed in the dataset stratified by gender, mixed vs. pure breed, dog vs. cat, and age in years. The second tab of the ShinyApp incorporate the geom_boxplot function and facet_grid functions to depict the rate of adoption by primary fur color of dogs and cats.  Given the dataset was composed of more than 14,000 data point, we chose to use boxplots to depict the stratified data. 
+
+```{r shiny app, eval=TRUE}
+# Define UI for application that draws a histogram
+ui <- fluidPage(theme = shinytheme("superhero"),
+                titlePanel("Pet Adoption in Malaysia"),
+                tabsetPanel(
+                  tabPanel("Adoption Speed of Sheltered Dogs and Cats in Malaysia",
+                sidebarLayout(
+                  sidebarPanel(
+                    p("The grid shows the adoption speeds of dogs and cats by breed status and age. Please use the selection panel below to stratify the data by gender. Note: a gender of 'mixed' status indicates the animals were adopted in groups."),
+                    br(),
+                    selectInput(inputId = "Gender", label = "Select Gender", choices = as.list(levels(proj_data2$Gender)))),
+                  mainPanel(plotOutput("plot1")))),
+                tabPanel("Adoption Speeds By Color",
+                sidebarLayout(
+                  sidebarPanel(
+                    p("The panel to the right shows the count of dogs and cats stratified by the primary base color of their fur. Please use drop down menu to visualize this data for each adoption speed."),
+                    br(),
+                    selectInput(inputId = "AdoptionSpeed", label = "Select Adoption Speed", choices = as.list(levels(proj_data2$AdoptionSpeed)))),
+                  mainPanel(plotOutput("colorplot"))))))
+# Define server logic required to draw a histogram
+server <- function(input, output){
+  Gender <- reactive(proj_data2 %>% filter(Gender == input$Gender))
+  output$plot1 <- renderPlot({proj_data2 %>% filter(Gender == input$Gender) %>% ggplot() +
+      theme(text = element_text(size=20, family = "Tahoma"), axis.text.x = element_text(angle = 65, hjust = 1, size=12)) + xlab("Adoption Speed") +
+      ylab("Age in Years") + scale_y_continuous(trans = "log2") + geom_boxplot(aes(AdoptionSpeed, age_adjusted_years, fill = AdoptionSpeed)) +
+      theme(legend.position = "none") + facet_grid(Type~purebreed)
+  })
+  
+  output$colorplot <- renderPlot({proj_data2 %>% filter(AdoptionSpeed == input$AdoptionSpeed) %>% ggplot() +
+      theme(text = element_text(size=20, family = "Tahoma"), axis.text.x = element_text(angle = 65, hjust = 1, size=12)) + xlab("Primary Color") +
+      ylab("Count") + geom_bar(aes(Color1, fill = Color1)) + facet_grid(.~Type) +
+      theme(legend.position = "none")})}
+
+# Run the application 
+shinyApp(ui = ui, server = server)
+
+```
+
+#### Word Cloud for visualization
+For description and names of the pets, it is relatively difficult to visualize them as they are more messy in nature and include too many levels. In order to describe the two variables, we performed text mining and presented a word cloud graph for each of them to visualize the most frequent words. To do that, we first removed words with non-ASCII characters, which is important as some of them were written in foreign language. Then we cleaned the text by transforming all letters to lower case, removing numbers, punctuation, English common stop words and extra white spaces. Then we built a term-document matrix and used wordcloud() function to convert it into a word cloud graph. 
+
+```{r word cloud,cache=TRUE}
+text <- proj_data2$Description
+
+# remove words with non-ASCII characters
+dat1 <- grep("text", iconv(text, "latin1", "ASCII", sub="text"))
+dat2 <- text[-dat1]
+
+train_corpus = Corpus(VectorSource(text))
+#transforming everything to lower case
+train_corpus = tm_map(train_corpus, content_transformer(tolower))
+#remove numbers and punctuations in the text
+train_corpus = tm_map(train_corpus, removeNumbers)
+train_corpus = tm_map(train_corpus, removePunctuation)
+#remove words such as "the", "and"
+train_corpus = tm_map(train_corpus, removeWords, c("the", "and", stopwords("english")))
+train_corpus =  tm_map(train_corpus, stripWhitespace)
+#print("Dimensions of our new X matrix:")
+X <- DocumentTermMatrix(train_corpus)
+#print(dim(X))
+
+# print("First 10 rows and first 10 columns of our matrix:")
+# inspect(X[1:10, 1:10])
+frequency_cutoff = 0.97
+X <- removeSparseTerms(X, frequency_cutoff)
+# print("Dimensions of our new X matrix:")
+# print(dim(X))
+
+# print("First 10 rows and first 10 columns of our matrix:")
+# inspect(X[1:10, 1:10])
+
+m <- as.matrix(X)
+v <- sort(colSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+#head(d, 10)
+
+
+barplot(d[1:10,]$freq, las = 2, names.arg = d[1:10,]$word,
+        col ="lightblue", main ="Most frequent words in pet descriptions",
+        ylab = "Word frequencies")
+
+set.seed(1234)
+wordcloud(words = d$word, freq = d$freq, min.freq = 1,
+          max.words=200, random.order=FALSE, rot.per=0.35,
+          scale=c(3.5,0.3),colors=brewer.pal(8, "Dark2"))
+
+####NAME####
+
+text2 <- proj_data2$Name
+
+# remove words with non-ASCII characters
+dat3 <- grep("text", iconv(text2, "latin1", "ASCII", sub="text"))
+dat4 <- text2[-dat3]
+
+train_corpus = Corpus(VectorSource(dat4))
+train_corpus = tm_map(train_corpus, content_transformer(tolower))
+train_corpus = tm_map(train_corpus, removeNumbers)
+train_corpus = tm_map(train_corpus, removePunctuation)
+train_corpus = tm_map(train_corpus, removeWords, c("the", "and", stopwords("english")))
+train_corpus =  tm_map(train_corpus, stripWhitespace)
+#print("Dimensions of our new X matrix:")
+X2 <- DocumentTermMatrix(train_corpus)
+#print(dim(X2))
+
+#print("First 10 rows and first 10 columns of our matrix:")
+#inspect(X2[1:10, 1:10])
+#frequency_cutoff = 0.95
+#X <- removeSparseTerms(X, frequency_cutoff)
+#print("Dimensions of our new X matrix:")
+#print(dim(X))
+
+# print("First 10 rows and first 10 columns of our matrix:")
+# inspect(X[1:10, 1:10])
+
+m2 <- as.matrix(X2)
+v2 <- sort(colSums(m2),decreasing=TRUE)
+d2 <- data.frame(word = names(v2),freq=v2)
+#head(d2, 10)
+
+barplot(d2[1:10,]$freq, las = 2, names.arg = d2[1:10,]$word,
+        col ="lightblue", main ="Most frequent words in pet name",
+        ylab = "Word frequencies")
+
+set.seed(1234)
+wordcloud(words = d2$word, freq = d2$freq, min.freq = 1,
+          max.words=200, random.order=FALSE, rot.per=0.35, scale=c(3.5,0.3),
+          colors=brewer.pal(8, "Dark2"))
+```
+
+
+### Prediction Model
+We used Random Forest and Lasso methods to build two models to predict binary adoption speed (adopted within 100 days vs. beyond 100 days). 
+
+First we splitted the data into training dataset and test dataset randomly in 8:2 ratio. The training dataset was used for building the model, and the test dataset was used to evaluate the model performance.
+
+```{r splitting datasets,cache=TRUE}
+set.seed(16327)
+trainIndex <- createDataPartition(proj_data2$adspeed_bin, p = 0.8, 
+                                  list = FALSE, 
+                                  times = 1)
+#head(trainIndex)
+
+adopt_train <- proj_data2[ trainIndex,]
+adopt_test  <- proj_data2[-trainIndex,]
+
+```
+
+#### Random Forest Classifier
+We fitted random forest model in the training dataset with all available variables except for name, IDs, transformed age, description, and the original breed variables due to a large amount of levels. Variable importance plot was provided to present the most important predictors of adoptability. AUC value on the test set was calculated as an evaluation of model performance (discrimination).
+
+From the model output, we can see that pet age when listed was the most important predictor of the binary adoptability, followed by the amount of photos posted, fur color and geographic location (state). An AUC value of 0.7417 indicates that the model has decent discrimination performance but not excellent.
+
+```{r random forest,cache=TRUE}
+rf.adopt = randomForest(adspeed_bin~.-Name-Description-AdoptionSpeed-Breed1-Breed2-age_adjusted_years,data = adopt_train)
+#importance(rf.adopt)
+imp <- varImpPlot(rf.adopt)
+
+imp <- as.data.frame(imp)
+imp$varnames <- rownames(imp) # row names to column
+
+ggplot(imp, aes(fill="#FF6666",x=reorder(varnames, MeanDecreaseGini), weight=MeanDecreaseGini)) + 
+  geom_bar() +
+  scale_fill_discrete() +
+  ylab("MeanDecreaseGini") +
+  xlab("Variable Name") +coord_flip() + theme(legend.position = "none") + ggtitle("Variable Importance from Random Forest")
+
+pred_test_rf <- predict(rf.adopt,adopt_test,type="prob")[,2]
+pred_test_rf<-as.numeric(pred_test_rf)
+roc_test_rf<- roc(response =adopt_test$adspeed_bin, predictor=pred_test_rf)
+roc_test_rf
+
+
+
+```
+
+
+#### LASSO regression model
+we fitted a logistic Lasso model to the trainig dataset (using the same variables used in the Random Forest model) to predict the binary adoption speed variable. To select the optimum tuning parameter, we performed 10-fold cross-validation to find the lambda value with the minimal cross-validation error measured in deviance. AUC value on the test set was calculated as an evaluation of model performance.
+
+From the model output, we can see that selected variables are: type, age, gender, color, maturity size, furlength, vaccination status, dewormed status, sterilization status, health, quantity, fee, state, pure/mixed breed, the amount of videos and the amount of photos. Only a small amount of dummy varibles were dropped by the model, indicating that all/most variables are considered important predictors by Lasso. An AUC value of 0.6736 indicates that the model performance was okay. 
+
+```{r lasso ,cache=TRUE}
+'%!in%' <- function(x,y)!('%in%'(x,y))
+#predictors_train<-as.matrix(adopt_train[,names(adopt_train) %!in% c("Name","RescuerID","Description","PetID","AdoptionSpeed","Breed1","Breed2")])
+#predictors_test<-as.matrix(adopt_test[,names(adopt_test) %!in% c("Name","RescuerID","Description","PetID","AdoptionSpeed","Breed1","Breed2")])
+
+predictors_train <- model.matrix(adspeed_bin~.-Name-Description-AdoptionSpeed-Breed1-Breed2-age_adjusted_years,data=adopt_train)[,-1]
+predictors_test <- model.matrix(adspeed_bin~.-Name-Description-AdoptionSpeed-Breed1-Breed2-age_adjusted_years,data = adopt_test)[,-1]
+
+adopt_train$adspeed_bin <- as.numeric(adopt_train$adspeed_bin)
+adopt_test$adspeed_bin <- as.numeric(adopt_test$adspeed_bin)
+
+lasso.adopt<-glmnet(x=predictors_train, y=adopt_train$adspeed_bin, family="binomial", alpha=1)
+
+set.seed(12343)
+cvfit_lasso_deviance <- cv.glmnet(x=predictors_train, y=adopt_train$adspeed_bin, family = "binomial",alpha=1, type.measure = "deviance", nfolds=10)
+plot(cvfit_lasso_deviance)
+coef(lasso.adopt, s=cvfit_lasso_deviance$lambda.min)
+
+#check AUC for the LASSO model
+#adopt_test$pred_prob_lasso<-predict(lasso.adopt, s=cvfit_lasso_deviance$lambda.min, newx= predictors_test, type="response")
+#performance(prediction(adopt_test$pred_prob_lasso, adopt_test$adspeed_bin), "auc")@y.values
+pred_test_lasso <- predict(lasso.adopt,s=cvfit_lasso_deviance$lambda.min, newx= predictors_test, type="response")[,1]
+roc_lasso <- roc(adopt_test$adspeed_bin,pred_test_lasso)
+roc_lasso
+```
+
+We also presented and compared the ROC curves from the random forest model and the Lasso model.
+
+```{r comparing curves ,cache=TRUE}
+roc.list <- roc(adopt_test$adspeed_bin ~ pred_test_lasso + pred_test_rf)
+g.list <- ggroc(roc.list,linetype = 1, size = 1)
+g.list + theme_minimal() + ggtitle("ROC curve comparison (AUC: LASSO-0.6736; RF-0.7417)") + 
+  geom_segment(aes(x = 1, xend = 0, y = 0, yend = 1), color="grey", linetype="dashed")
+
+```
+
+
+### Limitation
+By converting the categorical adoption speed variable into a binary predictor in order to create the prediciton model, we lost specificity in the adoption speed. However, we believe that the absolute speed may not not be as significant as being adopted within a certain range of time (such as 100 days). This is because the pet would not be euthanized if it were adopted within the first 100 days, as opposed to an increased likelihood of euthanasia after 100 days in a shelter. 
+
+While we created word cloud to visualize the frequencies of pet names and descriptions in the data set, they may be important predictors of adoption speed for future models. This would explain why the models created here had limited performance. It will be considered to be done in future work. 
+
+Moreover, we summarized the two breed variables into an indicator of mixed/pure breed due to too many levels in the breed type. If we could combine some pet breeds into large categories it might serve as a good predictor. 
+
+Another possibility of the low performance is the lack of true predictors. Some pet characteristics such as animal behaviors, lifestyles, trained or not, activeness, aggressiveness, etc. could improve the model.
