@@ -117,7 +117,7 @@ skim(proj_data2)
 #### Shiny app for visualization
 To visualize the data, we constructed a shiny app to generate two interactive ggplots. These plots analyzed age, base color of fur, type of animal (dog/cat), and breed status with respect to adoption speed: The first visualization shows adoption speeds, as indexed in the dataset stratified by gender, mixed vs. pure breed, dog vs. cat, and age in years. The second tab of the ShinyApp incorporate the geom_boxplot function and facet_grid functions to depict the rate of adoption by primary fur color of dogs and cats.  Given the dataset was composed of more than 14,000 data point, we chose to use boxplots to depict the stratified data. 
 
-```{r shiny app, eval=TRUE}
+```{r shiny app, eval=FALSE}
 # Define UI for application that draws a histogram
 ui <- fluidPage(theme = shinytheme("superhero"),
                 titlePanel("Pet Adoption in Malaysia"),
@@ -269,12 +269,14 @@ We fitted random forest model in the training dataset with all available variabl
 
 From the model output, we can see that pet age when listed was the most important predictor of the binary adoptability, followed by the amount of photos posted, fur color and geographic location (state). An AUC value of 0.7417 indicates that the model has decent discrimination performance but not excellent.
 
-```{r random forest,cache=TRUE}
+```{r random forest, cache=TRUE, echo=T, results='hide',fig.show = 'hide'}
 rf.adopt = randomForest(adspeed_bin~.-Name-Description-AdoptionSpeed-Breed1-Breed2-age_adjusted_years,data = adopt_train)
+imp <- as.data.frame(varImpPlot(rf.adopt))
 #importance(rf.adopt)
-imp <- varImpPlot(rf.adopt)
+```
 
-imp <- as.data.frame(imp)
+
+```{r random forest continue,cache=TRUE}
 imp$varnames <- rownames(imp) # row names to column
 
 ggplot(imp, aes(fill="#FF6666",x=reorder(varnames, MeanDecreaseGini), weight=MeanDecreaseGini)) + 
@@ -287,9 +289,6 @@ pred_test_rf <- predict(rf.adopt,adopt_test,type="prob")[,2]
 pred_test_rf<-as.numeric(pred_test_rf)
 roc_test_rf<- roc(response =adopt_test$adspeed_bin, predictor=pred_test_rf)
 roc_test_rf
-
-
-
 ```
 
 
