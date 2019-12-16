@@ -1388,8 +1388,8 @@ g.list + theme_minimal() + ggtitle(&quot;ROC curve comparison (AUC: LASSO-0.6736
 </div>
 <div id="limitation" class="section level3">
 <h3>Limitation</h3>
-<p>By converting the categorical adoption speed variable into a binary predictor in order to create the prediciton model, we lost specificity in the adoption speed. However, we believe that the absolute speed may not not be as significant as being adopted within a certain range of time (such as 100 days). This is because the pet would not be euthanized if it were adopted within the first 100 days, as opposed to an increased likelihood of euthanasia after 100 days in a shelter.</p>
-<p>While we created word cloud to visualize the frequencies of pet names and descriptions in the data set, they may be important predictors of adoption speed for future models. This would explain why the models created here had limited performance. It will be considered to be done in future work.</p>
+<p>By converting the categorical adoption speed variable into a binary outcome to fit the prediciton models, we lost some information. However, we believe that the specific speed may not not be as significant as being adopted within a certain range of time (such as 100 days). This is because the pet would not be euthanized if it were adopted within the first 100 days, as opposed to an increased likelihood of euthanasia after 100 days in a shelter.</p>
+<p>While we only created word cloud to visualize the frequencies of pet names and descriptions in the data set, they may still be important predictors of adoption speed for future models. This might explain why the models created here had limited performance.</p>
 <p>Moreover, we summarized the two breed variables into an indicator of mixed/pure breed due to too many levels in the breed type. If we could combine some pet breeds into large categories it might serve as a good predictor.</p>
 <p>Another possibility of the low performance is the lack of true predictors. Some pet characteristics such as animal behaviors, lifestyles, trained or not, activeness, aggressiveness, etc. could improve the model.</p>
 </div>

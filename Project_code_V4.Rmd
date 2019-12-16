@@ -3,7 +3,7 @@ title: "Pet adoption in Malaysia"
 author: "Ryan Keen & Katherine (Guilin) Li"
 date: "12/10/2019"
 output: html_document
-runtime: shiny
+#runtime: shiny
 ---
 
 ```{r setup, include=FALSE}
@@ -344,9 +344,9 @@ g.list + theme_minimal() + ggtitle("ROC curve comparison (AUC: LASSO-0.6736; RF-
 
 
 ### Limitation
-By converting the categorical adoption speed variable into a binary predictor in order to create the prediciton model, we lost specificity in the adoption speed. However, we believe that the absolute speed may not not be as significant as being adopted within a certain range of time (such as 100 days). This is because the pet would not be euthanized if it were adopted within the first 100 days, as opposed to an increased likelihood of euthanasia after 100 days in a shelter. 
+By converting the categorical adoption speed variable into a binary outcome to fit the prediciton models, we lost some information. However, we believe that the specific speed may not not be as significant as being adopted within a certain range of time (such as 100 days). This is because the pet would not be euthanized if it were adopted within the first 100 days, as opposed to an increased likelihood of euthanasia after 100 days in a shelter. 
 
-While we created word cloud to visualize the frequencies of pet names and descriptions in the data set, they may be important predictors of adoption speed for future models. This would explain why the models created here had limited performance. It will be considered to be done in future work. 
+While we only created word cloud to visualize the frequencies of pet names and descriptions in the data set, they may still be important predictors of adoption speed for future models. This might explain why the models created here had limited performance. 
 
 Moreover, we summarized the two breed variables into an indicator of mixed/pure breed due to too many levels in the breed type. If we could combine some pet breeds into large categories it might serve as a good predictor. 
 
